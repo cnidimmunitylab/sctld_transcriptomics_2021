@@ -1,0 +1,102 @@
+---
+title: "SCTLD_mapping"
+author: "Nciholas Kron"
+date: "5/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load packages}
+
+library(tidyverse)
+
+```
+
+```{r load orthologs from orthofinder}
+
+ofav_orthologs <- read.table(file = "fastas/OrthoFinder/Results_May10/Orthologues/Orthologues_GCF_002042975.1_ofav_dov_v1_protein/GCF_002042975.1_ofav_dov_v1_protein__v__Mcavernosa.maker.proteins.tsv", sep = "\t", header = TRUE)
+
+```
+
+```{r get annotation for ofav genes}
+
+ofav_gff <- read.delim(file = "./GCF_002042975.1_ofav_dov_v1_genomic.gff", sep = "\t", header = FALSE, skip = 8, comment.char = "#")
+
+ofav_gene2protein <- ofav_gff %>% filter(V3 == "CDS") %>% select(V9) %>% 
+  mutate(Locus_ofav =  str_extract(V9, pattern = "gene=[A-Z,0-9,. _-]*") %>%
+           str_remove(.,"gene=") ,
+         Protein_ofav = str_extract(V9, "protein_id=[A-Z,0-9,. _-]*") %>%
+           str_remove(.,"protein_id=") 
+         )%>%
+  select(Locus_ofav, Protein_ofav) %>%
+  unique()
+ 
+ofav_gff %>% filter(V3 == "gene") %>% nrow #29,105
+ofav_gff %>% filter(V3 == "CDS") %>% nrow #233,314
+ofav_gene2protein %>% nrow() #32,575
+
+```
+
+```{r load orthologs from orthofinder}
+
+ofav_orthologs <- read.table(file = "fastas/OrthoFinder/Results_May10/Orthologues/Orthologues_GCF_002042975.1_ofav_dov_v1_protein/GCF_002042975.1_ofav_dov_v1_protein__v__Mcavernosa.maker.proteins.tsv", sep = "\t", header = TRUE)
+
+```
+
+```{r get annotation for omcav genes}
+
+mcav_gff <- read.delim(file = "./Mcavernosa.maker.coding.gff3", sep = "\t", header = FALSE, skip = 8, comment.char = "#")
+
+mcav_gene2protein <- mcav_gff %>% filter(V3 == "CDS") %>% select(V9) %>% 
+  mutate(Locus_mcav =  str_extract(V9, pattern = "Parent=[aA-zZ,0-9,. _-]*") %>%
+           str_remove(.,"Parent=") %>% str_remove(., "-RA"),
+         Protein_mcav = str_extract(V9, "ID=[aA-zZ,0-9,. _-]*") %>%
+           str_remove(.,"ID=") 
+         )%>%
+  select(Locus_mcav, Protein_mcav) %>%
+  unique()
+ 
+mcav_gff %>% filter(V3 == "gene") %>% nrow #24,738
+mcav_gff %>% filter(V3 == "CDS") %>% nrow #141,898
+mcav_gene2protein %>% nrow() #24,739
+
+```
+
+```{r get DE data}
+
+ofav_DE <- readxl::read_xlsx("./ofav_annotated_DEGresults_allgenes.xlsx") %>%
+  select(Gene_ID, padj) %>%
+  rename("padj_ofav" = padj)
+
+mcav_DE <- readxl::read_xlsx("./mcav_annotated_DEGresults_allgenes.xlsx") %>%
+  select(gene_id, padj) %>%
+  rename("padj_mcav" = padj)
+
+```
+
+
+```{r}
+
+ofav_orthologs %>%
+  rename("Protein_ofav" = 
+GCF_002042975.1_ofav_dov_v1_protein, "Protein_mcav" = 	
+Mcavernosa.maker.proteins) %>%
+  separate_rows(., Protein_ofav, sep = ",") %>%
+  separate_rows(., Protein_mcav, sep = ",") %>%
+  unique() %>%
+  inner_join(ofav_gene2protein) %>%
+  unique() %>%
+  inner_join(mcav_gene2protein) %>%
+  unique() %>%
+  inner_join(mcav_DE, by = c("Locus_mcav" = "gene_id"))%>%
+  inner_join(ofav_DE, by = c("Locus_ofav" = "Gene_ID")) %>%
+  #filter(padj_mcav != "NA" & padj_ofav != "NA"  ) %>%
+  filter(padj_mcav <= 0.05 & padj_ofav <= 0.05  )
+  
+
+
+```
+
